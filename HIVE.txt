@@ -1,0 +1,777 @@
+------------------------------------------------------------------------------------------------------------------------------------------------
+Create Databases
+------------------------------------------------------------------------------------------------------------------------------------------------
+[cloudera@quickstart ~]$ hive
+Logging initialized using configuration in file:/etc/hive/conf.dist/hive-log4j.properties
+WARNING: Hive CLI is deprecated and migration to Beeline is recommended.
+hive> show databases;
+OK
+default
+mydb
+rajesh
+Time taken: 1.007 seconds, Fetched: 3 row(s)
+hive> create database practice;
+OK
+Time taken: 6.074 seconds
+hive> show databases;
+OK
+default
+mydb
+practice
+rajesh
+Time taken: 0.037 seconds, Fetched: 4 row(s)
+hive> use practice;
+OK
+Time taken: 0.02 seconds
+-----------------------------------------------------------------------------------------------------------------------------------------------
+Drop Database if it is not empty
+-----------------------------------------------------------------------------------------------------------------------------------------------
+hive> show databases;
+OK
+default
+mydatabase
+mydb
+myspark
+practice
+rajesh
+Time taken: 1.69 seconds, Fetched: 7 row(s)
+hive> drop database lucky;
+FAILED: Execution Error, return code 1 from org.apache.hadoop.hive.ql.exec.DDLTask. InvalidOperationException(message:Database lucky is not empty. One or more tables exist.)
+hive> 
+hive> drop database rajesh cascade;
+OK
+Time taken: 3.835 seconds
+hive> show databases;
+OK
+default
+mydatabase
+mydb
+myspark
+practice
+Time taken: 0.039 seconds, Fetched: 6 row(s)
+
+------------------------------------------------------------------------------------------------------------------------------------------------
+Load file from local filesystem and HDFS
+------------------------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------
+From local file system
+--------------------------------------------
+hive> create table sample1(id int,name string)
+    > row format delimited
+    > fields terminated by ',';
+OK
+Time taken: 0.796 seconds
+hive> load data local inpath '/home/cloudera/rajesh/sample' into table sample1;
+Loading data to table practice.sample1
+Table practice.sample1 stats: [numFiles=1, totalSize=57]
+OK
+Time taken: 1.61 seconds
+hive> select * from sample1;
+OK
+101	rajesh
+102	lucky
+103	shanth
+104	chowdary
+105	karthik
+Time taken: 0.58 seconds, Fetched: 5 row(s)
+-------------------------------------------
+hive> create table emp_par(id int,name string,salary int,sex string,dno int)
+    > partitioned by (d int)
+    > row format delimited
+    > fields terminated by ','
+    > stored as textFile
+    > location "/user/spark/sparklab";
+OK
+Time taken: 0.179 seconds
+hive> insert into table emp_par
+    > partition (d=11)
+    > select * from emp where dno=11;
+
+--------------------------------------------
+From HDFS
+--------------------------------------------
+hive> create table sample2(id int,name string)
+    > row format delimited
+    > fields terminated by ',';
+OK
+Time taken: 0.796 seconds
+hive> describe sample2;
+OK
+id                  	int                 	                    
+name                	string              	                    
+Time taken: 0.168 seconds, Fetched: 2 row(s)
+hive> load data inpath '/user/practice/sample' into table sample2;
+Loading data to table practice.sample2
+Table practice.sample2 stats: [numFiles=1, totalSize=57]
+OK
+Time taken: 0.312 seconds
+hive> select * from sample2;
+OK
+101	rajesh
+102	lucky
+103	shanth
+104	chowdary
+105	karthik
+Time taken: 0.073 seconds, Fetched: 5 row(s)
+-----------------------------------------------------------------------------------------------------------------------------------------------
+Array
+-----------------------------------------------------------------------------------------------------------------------------------------------
+//Collection of homogeneous elements
+hive> create table arr(name string,qual array<string>,age int,city string)
+    > row format delimited
+    > fields terminated by ','
+    > collection items terminated by '!';
+OK
+Time taken: 0.176 seconds
+hive> load data inpath '/user/practice/arr' into table arr;
+Loading data to table practice.arr
+Table practice.arr stats: [numFiles=1, totalSize=103]
+OK
+Time taken: 0.496 seconds
+hive> select * from arr;
+OK
+rajesh	["ssc","boi","bsc","mca"]	23	hyderabad
+lucky	["ssc","boi","btech"]	23	khammam
+shanth	["ssc","boi","bca","mca"]	25	hyderabad
+Time taken: 0.088 seconds, Fetched: 3 row(s)
+hive> select name,qual[0] from arr;
+OK
+rajesh	ssc
+lucky	ssc
+shanth	ssc
+Time taken: 0.167 seconds, Fetched: 3 row(s)
+hive> select name,size(qual) from arr;
+OK
+rajesh	4
+lucky	3
+shanth	4
+Time taken: 0.076 seconds, Fetched: 3 row(s)
+hive> select name,city from arr where array_contains(qual,'mca');
+OK
+rajesh	hyderabad
+shanth	hyderabad
+Time taken: 0.133 seconds, Fetched: 2 row(s)
+---------------------------------------------
+Explode
+---------------------------------------------
+//Example1
+hive> create table arr_explode(qual string)
+    > row format delimited
+    > fields terminated by ',';
+OK
+Time taken: 0.119 seconds
+hive> insert into table arr_explode
+    > select explode(qual) from arr;
+hive> select * from arr_explode;
+OK
+ssc
+boi
+bsc
+mca
+ssc
+boi
+btech
+ssc
+boi
+bca
+mca
+Time taken: 0.066 seconds, Fetched: 11 row(s)
+hive> select qual,count(*) from arr_explode group by qual;
+bca	1
+boi	3
+bsc	1
+btech	1
+mca	2
+ssc	3
+Time taken: 47.26 seconds, Fetched: 6 row(s)
+hive>  create table arr_explode_results(qual string,cnt int)
+    > row format delimited
+    > fields terminated by '\t';
+OK
+Time taken: 0.098 seconds
+hive> insert overwrite table arr_explode_results
+    > select qual,count(*) from arr_explode group by qual;
+hive> select * from arr_explode_results;
+OK
+bca	1
+boi	3
+bsc	1
+btech	1
+mca	2
+ssc	3
+Time taken: 0.12 seconds, Fetched: 6 row(s)
+
+//Check in HDFS
+[cloudera@quickstart rajesh]$ hadoop fs -cat /user/hive/warehouse/practice.db/arr_explode_results/000000_0
+bca	1
+boi	3
+bsc	1
+btech	1
+mca	2
+ssc	3
+//Example2
+hive> create table arr2(id string,price array<int>)
+    > row format delimited
+    > fields terminated by ','
+    > collection items terminated by '#';
+OK
+Time taken: 0.128 seconds
+hive> load data inpath '/user/practice/arr2' into table arr2;
+Loading data to table practice.arr2
+Table practice.arr2 stats: [numFiles=1, totalSize=106]
+OK
+Time taken: 0.426 seconds
+hive> select * from arr2;
+OK
+c101	[17,81,91,882]
+c102	[71,55,74,96,74]
+c103	[85,63,82,12]
+c104	[85,45,63,65]
+c102	[45,74,10,30]
+c104	[52,45,63,12]
+Time taken: 0.186 seconds, Fetched: 6 row(s)
+hive> select explode(price) from arr2;
+OK
+17
+81
+91
+882
+71
+55
+74
+96
+74
+85
+63
+82
+12
+85
+45
+63
+65
+45
+74
+10
+30
+52
+45
+63
+12
+Time taken: 0.068 seconds, Fetched: 25 row(s)
+hive> select id,explode(price) from arr2;
+FAILED: SemanticException [Error 10081]: UDTF's are not supported outside the SELECT clause, nor nested in expressions
+
+//It failed we need to do in another way
+hive> select id,myprice from arr2
+    > lateral view explode(price) p as myprice;
+OK
+c101	17
+c101	81
+c101	91
+c101	882
+c102	71
+c102	55
+c102	74
+c102	96
+c102	74
+c103	85
+c103	63
+c103	82
+c103	12
+c104	85
+c104	45
+c104	63
+c104	65
+c102	45
+c102	74
+c102	10
+c102	30
+c104	52
+c104	45
+c104	63
+c104	12
+Time taken: 0.086 seconds, Fetched: 25 row(s)
+-----------------------------------------------------------------------------------------------------------------------------------------------
+Struct
+-----------------------------------------------------------------------------------------------------------------------------------------------
+//Collection of heterogeneous elements
+hive> create table info(name string,age int,wife struct<name:string,age:int,city:string>,city string)
+    > row format delimited
+    > fields terminated by ','
+    > collection items terminated by '#';
+OK
+Time taken: 0.204 seconds
+hive> load data inpath '/user/practice/info' into table info;
+Loading data to table practice.info
+Table practice.info stats: [numFiles=1, totalSize=103]
+OK
+Time taken: 0.288 seconds
+hive> select * from info;
+OK
+rajesh	23	{"name":"lucky","age":23,"city":"khammam"}	hyderabad
+shanth	25	{"name":"rithu","age":23,"city":"delhi"}	mumbai
+vinnu	32	{"name":"vani","age":29,"city":"chennai"}	kolkatha
+Time taken: 0.062 seconds, Fetched: 3 row(s)
+hive>  select wife from info;
+OK
+{"name":"lucky","age":23,"city":"khammam"}
+{"name":"rithu","age":23,"city":"delhi"}
+{"name":"vani","age":29,"city":"chennai"}
+Time taken: 0.08 seconds, Fetched: 3 row(s)
+hive> select wife.name,wife.age,wife.city from info;
+OK
+lucky	23	khammam
+rithu	23	delhi
+vani	29	chennai
+Time taken: 0.073 seconds, Fetched: 3 row(s)
+-----------------------------------------------------------------------------------------------------------------------------------------------
+Map
+-----------------------------------------------------------------------------------------------------------------------------------------------
+//Collectin of key-value pais.
+hive> create table std_info(name string,qual map<string,int>,city string)
+    > row format delimited
+    > fields terminated by ','
+    > collection items terminated by '@'
+    > map keys terminated by '#';
+OK
+Time taken: 0.19 seconds
+hive> load data inpath '/user/practice/std_info' into table std_info;
+Loading data to table practice.std_info
+Table practice.std_info stats: [numFiles=1, totalSize=84]
+OK
+Time taken: 0.347 seconds
+hive> select * from std_info;
+OK
+rajesh	{"ssc":79,"boi":87,"bsc":82,"mca":80}	hyderabad
+lucky	{"ssc":97,"boi":90,"btech":90}	bengalore
+Time taken: 0.062 seconds, Fetched: 2 row(s)
+hive> select name,map_keys(qual) from std_info;
+OK
+rajesh	["ssc","boi","bsc","mca"]
+lucky	["ssc","boi","btech"]
+Time taken: 0.07 seconds, Fetched: 2 row(s)
+hive> select name,map_values(qual) from std_info;
+OK
+rajesh	[79,87,82,80]
+lucky	[97,90,90]
+Time taken: 0.072 seconds, Fetched: 2 row(s)
+
+hive> describe std_info_explode;
+OK
+name                	string              	                    
+keys                	array<string>       	                    
+values              	array<int>          	                    
+Time taken: 0.087 seconds, Fetched: 3 row(s)
+hive> insert overwrite table std_info_explode
+    > select name,map_keys(qual),map_values(qual) from std_info;
+hive> select * from std_info_explode;
+OK
+rajesh	["ssc","boi","bsc","mca"]	[79,87,82,80]
+lucky	["ssc","boi","btech"]	[97,90,90]
+Time taken: 0.065 seconds, Fetched: 2 row(s)
+hive> insert overwrite table std_info_explode_e
+    > select name,myp,myq from std_info_explode
+    > lateral view explode(keys) p as myp 
+    > lateral view explode(values) q as myq;
+hive> select * from std_info_explode_e;
+OK
+rajesh	ssc	79
+rajesh	ssc	87
+rajesh	ssc	82
+rajesh	ssc	80
+rajesh	boi	79
+rajesh	boi	87
+rajesh	boi	82
+rajesh	boi	80
+rajesh	bsc	79
+rajesh	bsc	87
+rajesh	bsc	82
+rajesh	bsc	80
+rajesh	mca	79
+rajesh	mca	87
+rajesh	mca	82
+rajesh	mca	80
+lucky	ssc	97
+lucky	ssc	90
+lucky	ssc	90
+lucky	boi	97
+lucky	boi	90
+lucky	boi	90
+lucky	btech	97
+lucky	btech	90
+lucky	btech	90
+Time taken: 0.074 seconds, Fetched: 25 row(s)
+
+//It multiplies the result like cartesian product 
+//It is not expected output.
+-----------------------------------------------------------------------------------------------------------------------------------------------
+Partition
+-----------------------------------------------------------------------------------------------------------------------------------------------
+//Diving the table into different parts based on the partition keys.
+//By default each table is non-partition table.
+//Partition is sub-directory of table directory.
+//Main use is no need to scan the entire data of particular data.
+
+hive> create table emp(id int,name string,salary int,sex string,dno int)
+    > row format delimited
+    > fields terminated by ',';
+OK
+Time taken: 0.136 seconds
+hive> load data inpath '/user/practice/emp' into table emp;
+Loading data to table practice.emp
+Table practice.emp stats: [numFiles=1, totalSize=427]
+OK
+Time taken: 0.756 seconds
+
+//Creating single partition key
+hive> create table emp_par(id int,name string,salary int,sex string,dno int)
+    > partitioned by (d int)
+    > row format delimited
+    > fields terminated by ',';
+OK
+Time taken: 1.24 seconds
+hive> insert overwrite table emp_par
+    > partition(d=11)
+    > select * from emp where dno=11;
+hive> select * from emp_par;
+OK
+102	lucky	85000	f	11	11
+104	chowdary	90000	f	11	11
+114	sunny	90000	f	11	11
+118	vani	15000	f	11	11
+Time taken: 1.678 seconds, Fetched: 4 row(s)
+
+//It creates sub-directory under directory.(d=11 is sub-directory which created under emp_par)
+[cloudera@quickstart rajesh]$ hadoop fs -ls /user/hive/warehouse/practice.db/emp_par
+Found 1 items
+drwxrwxrwx   - cloudera supergroup          0 2019-05-09 04:59 /user/hive/warehouse/practice.db/emp_par/d=11
+[cloudera@quickstart rajesh]$ hadoop fs -ls /user/hive/warehouse/practice.db/emp_par/d=11
+Found 1 items
+-rwxrwxrwx   1 cloudera supergroup         86 2019-05-09 04:59 /user/hive/warehouse/practice.db/emp_par/d=11/000000_0
+[cloudera@quickstart rajesh]$ hadoop fs -cat /user/hive/warehouse/practice.db/emp_par/d=11/000000_0
+102,lucky,85000,f,11
+104,chowdary,90000,f,11
+114,sunny,90000,f,11
+118,vani,15000,f,11
+
+//Creating multiple partition keys
+hive> create table emp_par2(id int,name string,salary int,sex string,dno int)
+    > partitioned by (d int,s string)
+    > row format delimited
+    > fields terminated by ',';
+OK
+Time taken: 0.19 seconds
+hive> insert overwrite table emp_par2
+    > partition (d=11,s='f')
+    > select * from emp where dno=11 and sex='f';
+hive> select * from emp_par2;
+OK
+102	lucky	85000	f	11	11	f
+104	chowdary	90000	f	11	11	f
+114	sunny	90000	f	11	11	f
+118	vani	15000	f	11	11	f
+Time taken: 0.069 seconds, Fetched: 4 row(s)
+
+//Check in HDFS
+[cloudera@quickstart rajesh]$ hadoop fs -ls /user/hive/warehouse/practice.db/emp_par2/
+Found 1 items
+drwxrwxrwx   - cloudera supergroup          0 2019-05-09 05:06 /user/hive/warehouse/practice.db/emp_par2/d=11
+[cloudera@quickstart rajesh]$ hadoop fs -ls /user/hive/warehouse/practice.db/emp_par2/d=11
+Found 1 items
+drwxrwxrwx   - cloudera supergroup          0 2019-05-09 05:06 /user/hive/warehouse/practice.db/emp_par2/d=11/s=f
+[cloudera@quickstart rajesh]$ hadoop fs -ls /user/hive/warehouse/practice.db/emp_par2/d=11/s=f
+Found 1 items
+-rwxrwxrwx   1 cloudera supergroup         86 2019-05-09 05:06 /user/hive/warehouse/practice.db/emp_par2/d=11/s=f/000000_0
+[cloudera@quickstart rajesh]$ hadoop fs -cat /user/hive/warehouse/practice.db/emp_par2/d=11/s=f/000000_0
+102,lucky,85000,f,11
+104,chowdary,90000,f,11
+114,sunny,90000,f,11
+118,vani,15000,f,11
+
+//In the above we have partitoned data statically.
+//Now we can partition data dynamically.By using the command.
+hive> create table emp_par3(id int,name string,salary int,sex string,dno int)
+    > partitioned by (d int,s string)
+    > row format delimited
+    > fields terminated by ',';
+OK
+Time taken: 0.11 seconds
+//We have to set below command.
+hive> set hive.exec.dynamic.partition=true;
+hive> set hive.exec.dynamic.partition.mode=nonstrict;
+hive> insert overwrite table emp_par3
+    > partition (d,f)
+    > select id,name,salary,sex,dno,dno,sex from emp;
+hive> select * from emp_par3;
+OK
+101	rajesh	90000	m	10	10	m
+102	lucky	85000	f	11	11	f
+104	chowdary	90000	f	11	11	f
+114	sunny	90000	f	11	11	f
+118	vani	15000	f	11	11	f
+106	amma	78000	f	12	12	f
+110	lakshmi	89000	f	12	12	f
+112	rajee	50000	f	12	12	f
+103	shanth	80000	m	12	12	m
+117	sai	55000	m	12	12	m
+105	garu	85000	f	13	13	f
+115	chinny	67000	f	13	13	f
+116	sony	24000	f	13	13	f
+111	kiran	78000	m	13	13	m
+113	akka	56000	f	14	14	f
+120	lovely	45000	f	14	14	f
+107	karthik	80000	m	14	14	m
+109	prasanth	67000	m	14	14	m
+119	sunny	34000	f	15	15	f
+108	shiva	78000	m	15	15	m
+Time taken: 0.283 seconds, Fetched: 20 row(s)
+hive> select * from emp_par3 where dno=12 and sex='m';
+OK
+103	shanth	80000	m	12	12	m
+117	sai	55000	m	12	12	m
+Time taken: 0.206 seconds, Fetched: 2 row(s)
+
+[cloudera@quickstart rajesh]$ hadoop fs -ls /user/hive/warehouse/practice.db/emp_par3/Found 6 items
+drwxrwxrwx   - cloudera supergroup          0 2019-05-09 05:19 /user/hive/warehouse/practice.db/emp_par3/d=10
+drwxrwxrwx   - cloudera supergroup          0 2019-05-09 05:19 /user/hive/warehouse/practice.db/emp_par3/d=11
+drwxrwxrwx   - cloudera supergroup          0 2019-05-09 05:19 /user/hive/warehouse/practice.db/emp_par3/d=12
+drwxrwxrwx   - cloudera supergroup          0 2019-05-09 05:19 /user/hive/warehouse/practice.db/emp_par3/d=13
+drwxrwxrwx   - cloudera supergroup          0 2019-05-09 05:19 /user/hive/warehouse/practice.db/emp_par3/d=14
+drwxrwxrwx   - cloudera supergroup          0 2019-05-09 05:19 /user/hive/warehouse/practice.db/emp_par3/d=15
+-----------------------------------------------------------------------------------------------------------------------------------------------
+Bucketing
+-----------------------------------------------------------------------------------------------------------------------------------------------
+//Which devides the table data into multiple files.
+//Each bucket is a datafile.
+//Like sample technique.we can datafiles into multiple analysts.
+//Which is used for efficient quering.
+//In Hive we have to enable bucktes by using
+  
+hive>set hive.enforce.bucketing=true; 
+hive> create table emp_buck(id int,name string,salary int,sex string,dno int)
+    > clustered by (sex) into 2 buckets
+    > row format delimited
+    > fields terminated by ',';
+OK
+Time taken: 0.172 seconds
+hive> insert overwrite table emp_buck
+    > select * from emp;
+
+//Check in HDFS
+[cloudera@quickstart rajesh]$ hadoop fs -ls /user/hive/warehouse/practice.db/emp_buck/
+Found 2 items
+-rwxrwxrwx   1 cloudera supergroup        275 2019-05-09 05:39 /user/hive/warehouse/practice.db/emp_buck/000000_0
+-rwxrwxrwx   1 cloudera supergroup        152 2019-05-09 05:39 /user/hive/warehouse/practice.db/emp_buck/000001_0
+[cloudera@quickstart rajesh]$ hadoop fs -cat /user/hive/warehouse/practice.db/emp_buck/000000_0
+120,lovely,45000,f,14
+119,sunny,34000,f,15
+118,vani,15000,f,11
+116,sony,24000,f,13
+115,chinny,67000,f,13
+114,sunny,90000,f,11
+113,akka,56000,f,14
+112,rajee,50000,f,12
+110,lakshmi,89000,f,12
+106,amma,78000,f,12
+105,garu,85000,f,13
+104,chowdary,90000,f,11
+102,lucky,85000,f,11
+[cloudera@quickstart rajesh]$ hadoop fs -cat /user/hive/warehouse/practice.db/emp_buck/000001_0
+108,shiva,78000,m,15
+107,karthik,80000,m,14
+101,rajesh,90000,m,10
+111,kiran,78000,m,13
+117,sai,55000,m,12
+103,shanth,80000,m,12
+109,prasanth,67000,m,14
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------
+Internal/Managed Table
+----------------------------------------------------------------
+If we delete the table the schema and data will be lost.
+
+hive> create table mydb.internal_table (id int,name string,salary int,sex string,dno int) 
+    > row format delimited 
+    > fields terminated by ',' 
+    > lines terminated by '\n' ;
+OK
+Time taken: 0.206 seconds
+hive> load data inpath '/user/spark/emp' into table mydb.internal_table;
+Loading data to table mydb.internal_table
+Table mydb.internal_table stats: [numFiles=1, totalSize=275]
+OK
+Time taken: 0.547 seconds
+hive> select * from mydb.internal_table;
+OK
+120	lovely	45000	f	14
+119	sunny	34000	f	15
+118	vani	15000	f	11
+116	sony	24000	f	13
+115	chinny	67000	f	13
+114	sunny	90000	f	11
+113	akka	56000	f	14
+112	rajee	50000	f	12
+110	lakshmi	89000	f	12
+106	amma	78000	f	12
+105	garu	85000	f	13
+104	chowdary	90000	f	11
+102	lucky	85000	f	11
+Time taken: 0.094 seconds, Fetched: 13 row(s)
+hive> drop table mydb.internal_table;
+OK
+Time taken: 0.287 seconds
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------
+ROW_NUMBER(),RANK() AND DENSE_RANK()
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------
+hive> create table cars(id int,name string,company string,power int) 
+    > row format delimited
+    > fields terminated by ',';
+
+hive> INSERT INTO Cars
+    > VALUES
+    > (1, 'Corrolla', 'Toyota', 1800),
+    > (2, 'City', 'Honda', 1500),
+    > (3, 'C200', 'Mercedez', 2000),
+    > (4, 'Vitz', 'Toyota', 1300),
+    > (5, 'Baleno', 'Suzuki', 1500),
+    > (6, 'C500', 'Mercedez', 5000),
+    > (7, '800', 'BMW', 8000),
+    > (8, 'Mustang', 'Ford', 5000),
+    > (9, '208', 'Peugeot', 5400),
+    > (10, 'Prius', 'Toyota', 3200),
+    > (11, 'Atlas', 'Volkswagen', 5000),
+    > (12, '110', 'Bugatti', 8000),
+    > (13, 'Landcruiser', 'Toyota', 3000),
+    > (14, 'Civic', 'Honda', 1800),
+    > (15, 'Accord', 'Honda', 2000);
+
+hive> select * from cars;
+OK
+1	Corrolla	Toyota	1800
+2	City	Honda	1500
+3	C200	Mercedez	2000
+4	Vitz	Toyota	1300
+5	Baleno	Suzuki	1500
+6	C500	Mercedez	5000
+7	800	BMW	8000
+8	Mustang	Ford	5000
+9	208	Peugeot	5400
+10	Prius	Toyota	3200
+11	Atlas	Volkswagen	5000
+12	110	Bugatti	8000
+13	Landcruiser	Toyota	3000
+14	Civic	Honda	1800
+15	Accord	Honda	2000
+Time taken: 0.078 seconds, Fetched: 15 row(s)
+
+hive> select name,company,power,row_number() over(order by power desc) from cars;
+800	BMW	8000	1
+110	Bugatti	8000	2
+208	Peugeot	5400	3
+C500	Mercedez	5000	4
+Atlas	Volkswagen	5000	5
+Mustang	Ford	5000	6
+Prius	Toyota	3200	7
+Landcruiser	Toyota	3000	8
+Accord	Honda	2000	9
+C200	Mercedez	2000	10
+Corrolla	Toyota	1800	11
+Civic	Honda	1800	12
+Baleno	Suzuki	1500	13
+City	Honda	1500	14
+Vitz	Toyota	1300	15
+Time taken: 30.986 seconds, Fetched: 15 row(s)
+
+hive> select name,company,power,row_number() over(partition by company order by power desc) from cars;
+800	BMW	8000	1
+110	Bugatti	8000	1
+Mustang	Ford	5000	1
+Accord	Honda	2000	1
+Civic	Honda	1800	2
+City	Honda	1500	3
+C500	Mercedez	5000	1
+C200	Mercedez	2000	2
+208	Peugeot	5400	1
+Baleno	Suzuki	1500	1
+Prius	Toyota	3200	1
+Landcruiser	Toyota	3000	2
+Corrolla	Toyota	1800	3
+Vitz	Toyota	1300	4
+Atlas	Volkswagen	5000	1
+Time taken: 31.95 seconds, Fetched: 15 row(s)
+
+hive> select name,company,power,rank() over(order by power desc) from cars;
+800	BMW	8000	1
+110	Bugatti	8000	1
+208	Peugeot	5400	3
+C500	Mercedez	5000	4
+Atlas	Volkswagen	5000	4
+Mustang	Ford	5000	4
+Prius	Toyota	3200	7
+Landcruiser	Toyota	3000	8
+Accord	Honda	2000	9
+C200	Mercedez	2000	9
+Corrolla	Toyota	1800	11
+Civic	Honda	1800	11
+Baleno	Suzuki	1500	13
+City	Honda	1500	13
+Vitz	Toyota	1300	15
+Time taken: 32.389 seconds, Fetched: 15 row(s)
+
+hive> select name,company,power,rank() over(partition by company order by power desc) from cars;
+800	BMW	8000	1
+110	Bugatti	8000	1
+Mustang	Ford	5000	1
+Accord	Honda	2000	1
+Civic	Honda	1800	2
+City	Honda	1500	3
+C500	Mercedez	5000	1
+C200	Mercedez	2000	2
+208	Peugeot	5400	1
+Baleno	Suzuki	1500	1
+Prius	Toyota	3200	1
+Landcruiser	Toyota	3000	2
+Corrolla	Toyota	1800	3
+Vitz	Toyota	1300	4
+Atlas	Volkswagen	5000	1
+Time taken: 32.478 seconds, Fetched: 15 row(s)
+
+hive> select name,company,power,dense_rank() over(order by power desc) from cars;
+800	BMW	8000	1
+110	Bugatti	8000	1
+208	Peugeot	5400	2
+C500	Mercedez	5000	3
+Atlas	Volkswagen	5000	3
+Mustang	Ford	5000	3
+Prius	Toyota	3200	4
+Landcruiser	Toyota	3000	5
+Accord	Honda	2000	6
+C200	Mercedez	2000	6
+Corrolla	Toyota	1800	7
+Civic	Honda	1800	7
+Baleno	Suzuki	1500	8
+City	Honda	1500	8
+Vitz	Toyota	1300	9
+Time taken: 31.822 seconds, Fetched: 15 row(s)
+
+hive> select name,company,power,dense_rank() over(partition by company order by power desc) from cars;
+800	BMW	8000	1
+110	Bugatti	8000	1
+Mustang	Ford	5000	1
+Accord	Honda	2000	1
+Civic	Honda	1800	2
+City	Honda	1500	3
+C500	Mercedez	5000	1
+C200	Mercedez	2000	2
+208	Peugeot	5400	1
+Baleno	Suzuki	1500	1
+Prius	Toyota	3200	1
+Landcruiser	Toyota	3000	2
+Corrolla	Toyota	1800	3
+Vitz	Toyota	1300	4
+Atlas	Volkswagen	5000	1
+Time taken: 33.048 seconds, Fetched: 15 row(s)
+
+
+
+
+
